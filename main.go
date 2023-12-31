@@ -15,73 +15,88 @@ var (
 	red   = "\033[1;31m"
 	green = "\033[1;32m"
 	reset = "\033[0m"
+	blue  = "\033[1;34m"
 )
 
 func main() {
 	printWelcomeMessage()
 
-	startIP := getUserInput("Enter the starting IP address: ", "\033[1;34m")
-	endIP := getUserInput("Enter the ending IP address: ", "\033[1;34m")
+	for {
+		var startIP, endIP string
 
-	startAddr := net.ParseIP(startIP)
-	endAddr := net.ParseIP(endIP)
+		for {
+			startIP = getUserInput("Enter the starting IP address: ", "\033[1;34m")
+			endIP = getUserInput("Enter the ending IP address: ", "\033[1;34m")
 
-	if startAddr == nil || endAddr == nil {
-		fmt.Println("Invalid IP address format.")
-		return
-	}
+			if isValidIP(startIP) && isValidIP(endIP) {
+				break
+			} else {
+				fmt.Println("Invalid IP address format. Please enter valid IP addresses.")
+			}
+		}
 
-	var wg sync.WaitGroup
-	var ipAddresses []net.IP
+		startAddr := net.ParseIP(startIP)
+		endAddr := net.ParseIP(endIP)
 
-	fmt.Printf("\n%s Scanning IP Range %s to %s %s\n", red+strings.Repeat("-", 120)+reset, startIP, endIP, red+strings.Repeat("-", 120)+reset)
+		var wg sync.WaitGroup
+		var ipAddresses []net.IP
 
-	// Generate a slice of IP addresses to scan
-	for ip := startAddr; lessThanOrEqual(ip, endAddr); incrementIP(ip) {
-		ipCopy := make(net.IP, len(ip))
-		copy(ipCopy, ip)
-		ipAddresses = append(ipAddresses, ipCopy)
-		if ip.Equal(endAddr) {
+		fmt.Printf("\n%s Scanning IP Range %s to %s %s\n", red+strings.Repeat("-", 120)+reset, startIP, endIP, red+strings.Repeat("-", 120)+reset)
+
+		// Generate a slice of IP addresses to scan
+		for ip := startAddr; lessThanOrEqual(ip, endAddr); incrementIP(ip) {
+			ipCopy := make(net.IP, len(ip))
+			copy(ipCopy, ip)
+			ipAddresses = append(ipAddresses, ipCopy)
+		}
+
+		// Define a channel to communicate results
+		results := make(chan string, len(ipAddresses))
+
+		// Launch goroutines to scan IP addresses
+		for _, ip := range ipAddresses {
+			wg.Add(1)
+			go func(ip net.IP) {
+				defer wg.Done()
+
+				ipStr := ip.String()
+				if isPortOpen(ipStr, minecraftPort) {
+					results <- fmt.Sprintf("%sMinecraft port (25565) is OPEN on %s%s", green, ipStr, reset)
+				} else {
+					results <- fmt.Sprintf("%sMinecraft port (25565) is CLOSED on %s%s", red, ipStr, reset)
+				}
+			}(ip)
+		}
+
+		// Close the results channel when all goroutines are done
+		go func() {
+			wg.Wait()
+			close(results)
+		}()
+
+		// Collect results into a slice
+		var scanResults []string
+		for result := range results {
+			scanResults = append(scanResults, result)
+		}
+
+		// Sort results
+		sort.Strings(scanResults)
+
+		// Print sorted results
+		for _, result := range scanResults {
+			fmt.Println(result)
+		}
+
+		// Prompt user if they want to continue scanning
+		fmt.Print("\nDo you want to continue scanning? (y/n): ")
+		var continueScan string
+		fmt.Scanln(&continueScan)
+
+		if strings.ToLower(continueScan) != "y" {
+			printGoodbyeMessage()
 			break
 		}
-	}
-
-	// Define a channel to communicate results
-	results := make(chan string, len(ipAddresses))
-
-	// Launch goroutines to scan IP addresses
-	for _, ip := range ipAddresses {
-		wg.Add(1)
-		go func(ip net.IP) {
-			defer wg.Done()
-
-			ipStr := ip.String()
-			if isPortOpen(ipStr, minecraftPort) {
-				results <- fmt.Sprintf("%sMinecraft port (25565) is OPEN on %s%s", green, ipStr, reset)
-			} else {
-				results <- fmt.Sprintf("%sMinecraft port (25565) is CLOSED on %s%s", red, ipStr, reset)
-			}
-		}(ip)
-	}
-
-	// Close the results channel when all goroutines are done
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	// Collect results into a slice
-	var scanResults []string
-	for result := range results {
-		scanResults = append(scanResults, result)
-	}
-
-	// Sort results
-	sort.Strings(scanResults)
-
-	// Print sorted results
-	for _, result := range scanResults {
-		fmt.Println(result)
 	}
 }
 
@@ -116,23 +131,26 @@ func isPortOpen(ip string, port int) bool {
 }
 
 // Function to print the welcome message
+// Function to print the welcome message
 func printWelcomeMessage() {
 	red := "\033[1;31m"
 	reset := "\033[0m"
 
 	fmt.Printf(`
-%s-----------------------------------------------------------------
-|	░██████╗░░█████╗░██████╗░██╗░░██╗███████╗██████╗░	|
-|	██╔════╝░██╔══██╗██╔══██╗██║░░██║██╔════╝██╔══██╗	|
-|	██║░░██╗░██║░░██║██████╔╝███████║█████╗░░██████╔╝	|
-|	██║░░╚██╗██║░░██║██╔═══╝░██╔══██║██╔══╝░░██╔══██╗	|
-|	╚██████╔╝╚█████╔╝██║░░░░░██║░░██║███████╗██║░░██║	|
-|	░╚═════╝░░╚════╝░╚═╝░░░░░╚═╝░░╚═╝╚══════╝╚═╝░░╚═╝	|
------------------------------------------------------------------
+%s🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥
+🟥░██████╗░░█████╗░██████╗░██╗░░██╗███████╗██████╗░ 🟥
+🟥██╔════╝░██╔══██╗██╔══██╗██║░░██║██╔════╝██╔══██╗ 🟥
+🟥██║░░██╗░██║░░██║██████╔╝███████║█████╗░░██████╔╝ 🟥
+🟥██║░░╚██╗██║░░██║██╔═══╝░██╔══██║██╔══╝░░██╔══██╗ 🟥
+🟥╚██████╔╝╚█████╔╝██║░░░░░██║░░██║███████╗██║░░██║ 🟥
+🟥░╚═════╝░░╚════╝░╚═╝░░░░░╚═╝░░╚═╝╚══════╝╚═╝░░╚═╝ 🟥
+🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥
 	`, red)
 
 	fmt.Printf("\n%s >> Written by Xnrrrrrr %s\n", red, reset)
-	fmt.Printf("\n%s %s %s\n\n", red+strings.Repeat("-", 120)+reset, "HAPPY HUNTING", red+strings.Repeat("-", 120)+reset)
+	redBlock := "🟥"
+	fmt.Printf("\n%s%s %s %s%s\n\n", redBlock, red+strings.Repeat("-", 120-len(redBlock)*2)+reset, "HAPPY HUNTING", red+strings.Repeat("-", 120-len(redBlock)*2)+reset, redBlock)
+
 }
 
 // Function to get user input
@@ -141,4 +159,35 @@ func getUserInput(prompt string, color string) string {
 	fmt.Print(color, prompt, reset)
 	fmt.Scanln(&userInput)
 	return userInput
+}
+
+// Function to check if the provided IP address is valid
+func isValidIP(ip string) bool {
+	return net.ParseIP(ip) != nil
+}
+
+// Function to print the goodbye message
+func printGoodbyeMessage() {
+	goodbyeMessage := `
+	🟫➖➖➖🟫
+	🟫🟫🟫🟫🟫
+	🟫🔳🟧🔳🟫
+	🟫🟧⬛🟧🟫
+	🟫🟫⬜🟫🟫
+	🟫🟧🟧🟧🟫
+	🟫🟫🟧🟫🟫
+	🟫🟧🟧🟧🟫
+	🟫🟧🟧🟧🟫
+	`
+
+	exitMessage := `
+	🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥
+	🟥                                                          🟥
+	🟥                       EXITING THE HOLE                   🟥
+	🟥                                                          🟥
+	🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥🟥
+	`
+
+	fmt.Println(goodbyeMessage)
+	fmt.Println(exitMessage)
 }
